@@ -1,3 +1,4 @@
+import '../lib/loadEnv.js';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
@@ -114,6 +115,20 @@ async function main() {
             }
         }
         console.log(`     ↳ 3 monthly budgets seeded`);
+
+        // Seed a couple of savings goals
+        const existingGoals = await prisma.goal.count({ where: { userId: user.id } });
+        if (existingGoals === 0) {
+            const endOfYear = new Date(now.getFullYear(), 11, 31);
+            const sixMonths = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+            await prisma.goal.createMany({
+                data: [
+                    { name: 'Emergency Fund', targetAmount: 5000, currentAmount: randomAmount(800, 2500), deadline: endOfYear, userId: user.id },
+                    { name: 'Vacation', targetAmount: 2000, currentAmount: randomAmount(100, 900), deadline: sixMonths, userId: user.id },
+                ],
+            });
+            console.log(`     ↳ 2 savings goals seeded`);
+        }
     }
 
     console.log('\n✅ Seeding complete!');

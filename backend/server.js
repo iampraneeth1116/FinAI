@@ -19,6 +19,7 @@ import userRoutes from './routes/users.js';
 import scenarioRoutes from './routes/scenario.js';
 import recurringRoutes from './routes/recurring.js';
 import alertRoutes from './routes/alerts.js';
+import goalRoutes from './routes/goals.js';
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/scenario', scenarioRoutes);
 app.use('/api/recurring', recurringRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/goals', goalRoutes);
 
 // 404 + centralized error handling (must be last)
 app.use(notFound);

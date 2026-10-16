@@ -18,6 +18,7 @@ model User {
   transactions Transaction[]
   categories   Category[]
   budgets      Budget[]
+  goals        Goal[]
 }
 
 model Category {
@@ -54,4 +55,16 @@ model Budget {
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Goal {
+  id            String   @id @default(uuid())
+  name          String
+  targetAmount  Float
+  currentAmount Float    @default(0)
+  deadline      DateTime
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
