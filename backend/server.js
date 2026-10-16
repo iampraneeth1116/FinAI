@@ -17,6 +17,8 @@ import aiRoutes from './routes/ai.js';
 import budgetRoutes from './routes/budgets.js';
 import userRoutes from './routes/users.js';
 import scenarioRoutes from './routes/scenario.js';
+import recurringRoutes from './routes/recurring.js';
+import alertRoutes from './routes/alerts.js';
 
 const app = express();
 
@@ -42,6 +44,8 @@ app.use('/api/ai', aiLimiter, aiRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/scenario', scenarioRoutes);
+app.use('/api/recurring', recurringRoutes);
+app.use('/api/alerts', alertRoutes);
 
 // 404 + centralized error handling (must be last)
 app.use(notFound);
