@@ -1,39 +1,31 @@
 "use client";
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Zap } from 'lucide-react';
+import { ArrowDownRight, Wallet, TrendingUp, Zap, Target, ArrowRight } from 'lucide-react';
 import { SkeletonCard, SkeletonChart } from './components/Skeleton';
+import RecurringCard from './components/RecurringCard';
+import AlertsPanel from './components/AlertsPanel';
+import ReportExport from './components/ReportExport';
+import { api, fmt } from './lib/api';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-
-function StatCard({ title, value, icon: Icon, trend, trendLabel, color }) {
+function StatCard({ title, value, icon: Icon, color }) {
   return (
     <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-800 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{title}</p>
-          <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 mt-1">
-            ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </h2>
+          <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 mt-1">{fmt(value)}</h2>
         </div>
         <div className={`w-12 h-12 ${color} rounded-full flex items-center justify-center`}>
           <Icon className="w-6 h-6" />
         </div>
       </div>
-      {trend !== undefined && (
-        <div className="mt-4 flex items-center gap-2 text-sm">
-          <span className={`flex items-center font-medium ${trend >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-            {trend >= 0 ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
-            {Math.abs(trend).toFixed(1)}%
-          </span>
-          <span className="text-zinc-500">{trendLabel}</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -44,9 +36,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 shadow-lg text-sm">
         <p className="font-semibold text-zinc-700 dark:text-zinc-300 mb-1">{label}</p>
         {payload.map((pld) => (
-          <p key={pld.dataKey} style={{ color: pld.color }}>
-            {pld.name}: ${Number(pld.value).toFixed(2)}
-          </p>
+          <p key={pld.dataKey} style={{ color: pld.color }}>{pld.name}: {fmt(pld.value)}</p>
         ))}
       </div>
     );
@@ -54,33 +44,75 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
+function GoalsStrip({ goals }) {
+  if (!goals.length) return null;
+  return (
+    <div className="mt-6 bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Target className="w-4 h-4 text-blue-500" />
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Savings Goals</h3>
+        </div>
+        <Link href="/goals" className="text-xs font-medium text-emerald-600 hover:text-emerald-500 flex items-center gap-1">
+          View all <ArrowRight className="w-3 h-3" />
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {goals.slice(0, 3).map((g) => {
+          const pct = g.projection?.percentComplete ?? 0;
+          return (
+            <div key={g.id} className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{g.name}</p>
+                <span className="text-xs text-zinc-400">{pct.toFixed(0)}%</span>
+              </div>
+              <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" style={{ width: `${Math.min(pct, 100)}%` }} />
+              </div>
+              <p className="text-xs text-zinc-400 mt-1.5">{fmt(g.currentAmount)} of {fmt(g.targetAmount)}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [summary, setSummary] = useState({ income: 0, expenses: 0, balance: 0 });
   const [monthly, setMonthly] = useState([]);
   const [byCategory, setByCategory] = useState([]);
   const [recent, setRecent] = useState([]);
-  const [aiInsights, setAiInsights] = useState([]);
+  const [recurring, setRecurring] = useState(null);
+  const [alerts, setAlerts] = useState(null);
+  const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [intelLoading, setIntelLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { setLoading(false); return; }
+    const token = typeof window !== 'undefined' && localStorage.getItem('token');
+    if (!token) { setLoading(false); setIntelLoading(false); return; }
 
-    const headers = { Authorization: `Bearer ${token}` };
+    // Core analytics
+    Promise.allSettled([
+      api.get('/analytics/summary'),
+      api.get('/analytics/monthly'),
+      api.get('/analytics/by-category'),
+      api.get('/analytics/recent'),
+      api.get('/goals'),
+    ]).then(([sum, mon, cat, rec, gls]) => {
+      if (sum.status === 'fulfilled') setSummary(sum.value);
+      if (mon.status === 'fulfilled') setMonthly(Array.isArray(mon.value) ? mon.value : []);
+      if (cat.status === 'fulfilled') setByCategory(Array.isArray(cat.value) ? cat.value : []);
+      if (rec.status === 'fulfilled') setRecent(Array.isArray(rec.value) ? rec.value : []);
+      if (gls.status === 'fulfilled') setGoals(gls.value.goals || []);
+    }).finally(() => setLoading(false));
 
-    Promise.all([
-      fetch(`${API_BASE}/analytics/summary`, { headers }).then(r => r.json()),
-      fetch(`${API_BASE}/analytics/monthly`, { headers }).then(r => r.json()),
-      fetch(`${API_BASE}/analytics/by-category`, { headers }).then(r => r.json()),
-      fetch(`${API_BASE}/analytics/recent`, { headers }).then(r => r.json()),
-      fetch(`${API_BASE}/ai/insights`, { headers }).then(r => r.json()),
-    ]).then(([sum, mon, cat, rec, ins]) => {
-      if (!sum.error) setSummary(sum);
-      if (!mon.error) setMonthly(Array.isArray(mon) ? mon : []);
-      if (!cat.error) setByCategory(Array.isArray(cat) ? cat : []);
-      if (!rec.error) setRecent(Array.isArray(rec) ? rec : []);
-      if (ins.insights) setAiInsights(ins.insights);
-    }).catch(console.error).finally(() => setLoading(false));
+    // Financial intelligence (recurring + anomalies)
+    Promise.allSettled([api.get('/recurring'), api.get('/alerts')]).then(([rc, al]) => {
+      if (rc.status === 'fulfilled') setRecurring(rc.value);
+      if (al.status === 'fulfilled') setAlerts(al.value);
+    }).finally(() => setIntelLoading(false));
   }, []);
 
   if (loading) {
@@ -94,12 +126,8 @@ export default function Home() {
           <SkeletonCard /><SkeletonCard /><SkeletonCard />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800">
-            <SkeletonChart />
-          </div>
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800">
-            <SkeletonChart />
-          </div>
+          <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800"><SkeletonChart /></div>
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800"><SkeletonChart /></div>
         </div>
       </div>
     );
@@ -107,36 +135,32 @@ export default function Home() {
 
   return (
     <>
-      <header className="mb-8 animate-fade-up">
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Overview</h1>
-        <p className="text-zinc-500 dark:text-zinc-400 mt-1">Here's what's happening with your money.</p>
+      <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-up">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Overview</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 mt-1">Here's what's happening with your money.</p>
+        </div>
+        <ReportExport />
       </header>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard
-          title="Total Balance"
-          value={summary.balance}
-          icon={Wallet}
-          color="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500"
-        />
-        <StatCard
-          title="Total Income"
-          value={summary.income}
-          icon={TrendingUp}
-          color="bg-blue-50 dark:bg-blue-500/10 text-blue-500"
-        />
-        <StatCard
-          title="Total Expenses"
-          value={summary.expenses}
-          icon={ArrowDownRight}
-          color="bg-rose-50 dark:bg-rose-500/10 text-rose-500"
-        />
+        <StatCard title="Total Balance" value={summary.balance} icon={Wallet} color="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500" />
+        <StatCard title="Total Income" value={summary.income} icon={TrendingUp} color="bg-blue-50 dark:bg-blue-500/10 text-blue-500" />
+        <StatCard title="Total Expenses" value={summary.expenses} icon={ArrowDownRight} color="bg-rose-50 dark:bg-rose-500/10 text-rose-500" />
       </div>
+
+      {/* Financial Intelligence: Recurring + Anomaly Alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <RecurringCard data={recurring} loading={intelLoading} />
+        <AlertsPanel data={alerts} loading={intelLoading} />
+      </div>
+
+      {/* Goals summary */}
+      <GoalsStrip goals={goals} />
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-        {/* Monthly Income vs Expenses (Area Chart) */}
         <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-6">Income vs Expenses (6 months)</h3>
           {monthly.length === 0 ? (
@@ -166,7 +190,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Category Breakdown (Pie Chart) */}
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Spending by Category</h3>
           {byCategory.length === 0 ? (
@@ -175,20 +198,10 @@ export default function Home() {
             <>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
-                  <Pie
-                    data={byCategory}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {byCategory.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
+                  <Pie data={byCategory} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+                    {byCategory.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
+                  <Tooltip formatter={(value) => fmt(value)} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="mt-3 space-y-1.5">
@@ -198,7 +211,7 @@ export default function Home() {
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>
                       <span className="text-zinc-600 dark:text-zinc-400 truncate max-w-[120px]">{cat.name}</span>
                     </div>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">${cat.value.toFixed(2)}</span>
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{fmt(cat.value)}</span>
                   </div>
                 ))}
               </div>
@@ -209,7 +222,6 @@ export default function Home() {
 
       {/* Monthly Bar Chart + Recent Transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-6">
-        {/* Bar Chart */}
         <div className="lg:col-span-3 bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-6">Monthly Expenses</h3>
           {monthly.length === 0 ? (
@@ -228,7 +240,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Recent Transactions */}
         <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Recent Transactions</h3>
           {recent.length === 0 ? (
@@ -245,7 +256,7 @@ export default function Home() {
                     <p className="text-xs text-zinc-400">{new Date(t.date).toLocaleDateString()}</p>
                   </div>
                   <span className={`text-sm font-semibold ${t.amount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    {t.amount >= 0 ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
+                    {t.amount >= 0 ? '+' : ''}{fmt(Math.abs(t.amount))}
                   </span>
                 </div>
               ))}
@@ -263,9 +274,9 @@ export default function Home() {
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">AI Assistant Ready</h3>
           <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-0.5">Ask anything about your finances — tap the AI Assistant to get personalized insights.</p>
         </div>
-        <a href="/assistant" className="md:ml-auto px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm rounded-xl transition-colors whitespace-nowrap">
+        <Link href="/assistant" className="md:ml-auto px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm rounded-xl transition-colors whitespace-nowrap">
           Open AI Assistant
-        </a>
+        </Link>
       </div>
     </>
   );

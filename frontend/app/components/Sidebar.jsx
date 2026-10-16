@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { Home, List, PieChart, MessageSquare, Settings, LogOut, BarChart2, X } from 'lucide-react';
+import { Home, List, PieChart, MessageSquare, Settings, LogOut, BarChart2, Target, X } from 'lucide-react';
 import { useMobileNav } from '../context/MobileNavContext';
 
 export default function Sidebar() {
@@ -27,6 +27,7 @@ export default function Sidebar() {
         { name: 'Dashboard', href: '/', icon: Home },
         { name: 'Transactions', href: '/transactions', icon: List },
         { name: 'Budgets', href: '/budgets', icon: PieChart },
+        { name: 'Goals', href: '/goals', icon: Target },
         { name: 'Simulator', href: '/scenario', icon: BarChart2 },
         { name: 'AI Assistant', href: '/assistant', icon: MessageSquare },
         { name: 'Settings', href: '/settings', icon: Settings },
