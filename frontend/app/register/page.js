@@ -27,7 +27,9 @@ export default function Register() {
             const data = await res.json();
 
             if (!res.ok) {
-                throw new Error(data.error || 'Registration failed');
+                // Surface field-level validation messages when present.
+                const detail = data.details?.map((d) => d.message).join('. ');
+                throw new Error(detail || data.error || 'Registration failed');
             }
 
             localStorage.setItem('token', data.token);
@@ -110,11 +112,13 @@ export default function Register() {
                                 <input
                                     type="password"
                                     required
+                                    minLength={8}
                                     className="block w-full pl-10 bg-zinc-50 dark:bg-zinc-800 border-transparent focus:bg-white dark:focus:bg-zinc-950 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl py-2 px-3 text-sm transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-none"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                 />
                             </div>
+                            <p className="mt-1 text-xs text-zinc-400">At least 8 characters.</p>
                         </div>
 
                         <button
