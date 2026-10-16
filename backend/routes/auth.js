@@ -1,80 +1,59 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
+import { asyncHandler } from '../lib/asyncHandler.js';
+import { ApiError } from '../lib/ApiError.js';
+import { validate } from '../middleware/validate.js';
+import { registerSchema, loginSchema } from '../schemas/index.js';
+import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_ROUNDS } from '../lib/config.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_key_for_dev';
 
-router.post('/register', async (req, res) => {
-    try {
-        const { email, password, name } = req.body;
+function signToken(user) {
+    return jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
 
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
-        }
+router.post('/register', validate({ body: registerSchema }), asyncHandler(async (req, res) => {
+    const { email, password, name } = req.body;
 
-        const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (existingUser) {
-            return res.status(400).json({ error: 'User already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await prisma.user.create({
-            data: {
-                email,
-                password: hashedPassword,
-                name,
-            },
-        });
-
-        const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
-            expiresIn: '7d',
-        });
-
-        res.status(201).json({
-            message: 'User registered successfully',
-            token,
-            user: { id: user.id, email: user.email, name: user.name },
-        });
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+        throw new ApiError(409, 'An account with this email already exists');
     }
-});
 
-router.post('/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const user = await prisma.user.create({
+        data: { email, password: hashedPassword, name },
+    });
 
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
-        }
+    const token = signToken(user);
+    res.status(201).json({
+        message: 'User registered successfully',
+        token,
+        user: { id: user.id, email: user.email, name: user.name },
+    });
+}));
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid email or password' });
-        }
+router.post('/login', validate({ body: loginSchema }), asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
 
-        const validPassword = await bcrypt.compare(password, user.password);
-        if (!validPassword) {
-            return res.status(401).json({ error: 'Invalid email or password' });
-        }
+    const user = await prisma.user.findUnique({ where: { email } });
+    // Always run a comparison even when the user is missing to reduce timing
+    // side-channels that reveal whether an email is registered.
+    const hash = user?.password || '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv';
+    const validPassword = await bcrypt.compare(password, hash);
 
-        const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
-            expiresIn: '7d',
-        });
-
-        res.json({
-            message: 'Login successful',
-            token,
-            user: { id: user.id, email: user.email, name: user.name },
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+    if (!user || !validPassword) {
+        throw new ApiError(401, 'Invalid email or password');
     }
-});
+
+    const token = signToken(user);
+    res.json({
+        message: 'Login successful',
+        token,
+        user: { id: user.id, email: user.email, name: user.name },
+    });
+}));
 
 export default router;
