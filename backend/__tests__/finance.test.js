@@ -17,16 +17,16 @@ describe('merchantKey', () => {
 describe('detectRecurring', () => {
     it('detects a monthly subscription with consistent amounts', () => {
         const txns = [
-            { id: '1', amount: -15.99, description: 'Netflix', date: daysAgo(90) },
-            { id: '2', amount: -15.99, description: 'Netflix', date: daysAgo(60) },
-            { id: '3', amount: -15.99, description: 'Netflix', date: daysAgo(30) },
+            { id: '1', amount: -15.99, description: 'Netflix', date: daysAgo(80) },
+            { id: '2', amount: -15.99, description: 'Netflix', date: daysAgo(50) },
+            { id: '3', amount: -15.99, description: 'Netflix', date: daysAgo(20) },
         ];
         const result = detectRecurring(txns);
         expect(result).toHaveLength(1);
         expect(result[0].cadence).toBe('monthly');
         expect(result[0].averageAmount).toBeCloseTo(15.99, 2);
         expect(result[0].occurrences).toBe(3);
-        expect(new Date(result[0].nextExpectedDate).getTime()).toBeGreaterThan(Date.now() - 1);
+        expect(new Date(result[0].nextExpectedDate).getTime()).toBeGreaterThan(Date.now());
     });
 
     it('ignores one-off purchases and irregular spending', () => {
