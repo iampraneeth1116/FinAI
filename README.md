@@ -5,7 +5,7 @@ projections. It combines a financial analytics engine, a Google Gemini–powered
 grounded in the user's real data, and a "what-if" scenario simulator — wrapped in a polished,
 responsive dashboard.
 
-**Code:** [GitHub Repository](https://github.com/iampraneeth1116/FinAI) · **Live Demo:** [finance-ai-demo.vercel.app](https://finance-ai-demo.vercel.app)
+**Code:** [GitHub Repository](https://github.com/iampraneeth1116/FinAI) · **Live Demo:** [fin-ai-v1.vercel.app](https://fin-ai-v1.vercel.app/login)
 
 **Tech Stack:** Next.js 16 · React 19 · Tailwind CSS 4 · Recharts · Express 5 · Prisma · PostgreSQL · JWT + bcrypt · Zod · Google Gemini API · Jest + Supertest
 
