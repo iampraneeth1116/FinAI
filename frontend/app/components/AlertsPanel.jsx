@@ -1,8 +1,8 @@
 "use client";
 import { useState } from 'react';
-import { ShieldAlert, ShieldCheck, AlertTriangle, Copy, Sparkle, ChevronDown } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, AlertTriangle, Copy, Sparkle, ChevronDown, Wallet } from 'lucide-react';
 
-const ICONS = { amount_spike: AlertTriangle, duplicate: Copy, new_merchant: Sparkle };
+const ICONS = { amount_spike: AlertTriangle, duplicate: Copy, new_merchant: Sparkle, budget_over: Wallet, budget_warning: Wallet };
 const SEVERITY_STYLES = {
     high: 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400',
     medium: 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400',
@@ -27,7 +27,7 @@ export default function AlertsPanel({ data, loading }) {
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
                 {alerts.length > 0 ? <ShieldAlert className="w-4 h-4 text-rose-500" /> : <ShieldCheck className="w-4 h-4 text-emerald-500" />}
-                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Anomaly Alerts</h3>
+                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Alerts</h3>
                 {alerts.length > 0 && (
                     <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400">
                         {alerts.length}
@@ -38,7 +38,7 @@ export default function AlertsPanel({ data, loading }) {
             {alerts.length === 0 ? (
                 <div className="h-24 flex flex-col items-center justify-center text-center text-zinc-400">
                     <ShieldCheck className="w-7 h-7 mb-2 text-emerald-400" />
-                    <p className="text-sm">No unusual activity detected.</p>
+                    <p className="text-sm">No alerts right now.</p>
                 </div>
             ) : (
                 <>

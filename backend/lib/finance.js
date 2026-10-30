@@ -214,6 +214,54 @@ export function detectAnomalies(transactions, opts = {}) {
 }
 
 /**
+ * Flag budgets that are close to or over their limit, based on actual spending
+ * in each budget's month:
+ *   - budget_warning: more than 80% of the budget used
+ *   - budget_over:    spending has exceeded the budget
+ *
+ * @param budgets budgets to check (each must have id, amount, month, year)
+ * @param transactions transaction history (each must have amount, date)
+ * @returns array of alerts, overspent budgets first
+ */
+export function detectBudgetAlerts(budgets, transactions, now = new Date()) {
+    const alerts = [];
+
+    for (const b of budgets) {
+        const start = new Date(b.year, b.month - 1, 1);
+        const end = new Date(b.year, b.month, 0, 23, 59, 59, 999);
+        const spent = transactions
+            .filter(t => t.amount < 0 && new Date(t.date) >= start && new Date(t.date) <= end)
+            .reduce((s, t) => s + Math.abs(t.amount), 0);
+        const pct = b.amount > 0 ? (spent / b.amount) * 100 : 0;
+        const period = start.toLocaleString('default', { month: 'long' });
+
+        if (spent > b.amount) {
+            alerts.push({
+                id: `budget-${b.id}`,
+                type: 'budget_over',
+                severity: 'high',
+                title: `${period} budget exceeded`,
+                message: `You've spent $${spent.toFixed(2)} of your $${b.amount.toFixed(2)} budget, $${(spent - b.amount).toFixed(2)} over.`,
+                amount: -spent,
+                date: now,
+            });
+        } else if (pct > 80) {
+            alerts.push({
+                id: `budget-${b.id}`,
+                type: 'budget_warning',
+                severity: 'medium',
+                title: `${period} budget almost used`,
+                message: `You've used ${pct.toFixed(0)}% of your $${b.amount.toFixed(2)} budget, $${(b.amount - spent).toFixed(2)} left.`,
+                amount: -spent,
+                date: now,
+            });
+        }
+    }
+
+    return alerts.sort((a, b) => (a.type === b.type ? 0 : a.type === 'budget_over' ? -1 : 1));
+}
+
+/**
  * Project when a savings goal will be completed given a monthly saving rate.
  * @returns { remaining, percentComplete, monthsToGoal, projectedCompletionDate, onTrack, requiredMonthly }
  */

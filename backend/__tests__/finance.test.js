@@ -1,6 +1,6 @@
 import {
     merchantKey, detectRecurring, estimateMonthlyRecurringCost,
-    detectAnomalies, projectGoal, estimateMonthlySavingRate,
+    detectAnomalies, detectBudgetAlerts, projectGoal, estimateMonthlySavingRate,
 } from '../lib/finance.js';
 import { buildMonthlyReport, reportToCsv } from '../lib/report.js';
 
@@ -89,6 +89,47 @@ describe('detectAnomalies', () => {
 
     it('returns no alerts for an empty history', () => {
         expect(detectAnomalies([])).toEqual([]);
+    });
+});
+
+describe('detectBudgetAlerts', () => {
+    const budget = { id: 'b1', amount: 100, month: 3, year: 2026 };
+    const spend = (amount, date = new Date(2026, 2, 15)) => ({ amount, date });
+
+    it('flags a budget that has been exceeded', () => {
+        const [alert] = detectBudgetAlerts([budget], [spend(-150)]);
+        expect(alert).toMatchObject({ type: 'budget_over', severity: 'high', id: 'budget-b1' });
+        expect(alert.message).toContain('$50.00 over');
+    });
+
+    it('warns when more than 80% of a budget is used', () => {
+        const [alert] = detectBudgetAlerts([budget], [spend(-85)]);
+        expect(alert).toMatchObject({ type: 'budget_warning', severity: 'medium' });
+    });
+
+    it('treats exactly 100% as a warning, not overspending', () => {
+        const [alert] = detectBudgetAlerts([budget], [spend(-100)]);
+        expect(alert.type).toBe('budget_warning');
+    });
+
+    it('stays quiet at or below 80%', () => {
+        expect(detectBudgetAlerts([budget], [spend(-80)])).toEqual([]);
+    });
+
+    it('ignores income and spending from other months', () => {
+        const txns = [spend(500), spend(-500, new Date(2026, 1, 28)), spend(-500, new Date(2026, 3, 1))];
+        expect(detectBudgetAlerts([budget], txns)).toEqual([]);
+    });
+
+    it('counts spending on the last day of the month', () => {
+        const [alert] = detectBudgetAlerts([budget], [spend(-150, new Date(2026, 2, 31, 22))]);
+        expect(alert.type).toBe('budget_over');
+    });
+
+    it('lists overspent budgets before warnings', () => {
+        const april = { id: 'b2', amount: 100, month: 4, year: 2026 };
+        const alerts = detectBudgetAlerts([budget, april], [spend(-85), spend(-150, new Date(2026, 3, 15))]);
+        expect(alerts.map(a => a.type)).toEqual(['budget_over', 'budget_warning']);
     });
 });
 

@@ -33,6 +33,8 @@ responsive dashboard.
 - 🛡️ **Anomaly & fraud alerts** — statistical rules flag unusual activity: amount spikes
   (> mean + 2.5σ), first-time merchants in the recent window, and likely duplicate charges.
   Severity-ranked and shown in the UI.
+- 💸 **Budget alerts** — warns when more than 80% of this month's budget is used and flags it
+  once spending goes over.
 - 🎯 **Savings goal tracking** — create goals ("Save $5,000 by December"), log contributions,
   and get an on-track/off-track projection of the completion date based on your real saving rate,
   plus the monthly amount required to hit the deadline.
@@ -132,7 +134,7 @@ npm test
 | GET/POST/PUT/DELETE | `/api/categories` | Category management |
 | GET/POST/PUT/DELETE | `/api/goals` | Goals + `/:id/contribute` + projections |
 | GET | `/api/recurring` | Detected subscriptions + monthly cost |
-| GET | `/api/alerts` | Anomaly / fraud alerts |
+| GET | `/api/alerts` | Budget alerts and anomaly / fraud alerts |
 | GET | `/api/analytics/{summary,monthly,by-category,recent}` | Dashboard analytics |
 | POST | `/api/scenario/simulate` | What-if projections |
 | GET | `/api/reports/monthly[.pdf|.csv]` | Monthly report (JSON/PDF/CSV) |
