@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Upload, Trash2, Edit2, X, Loader2 } from 'lucide-react';
+import { Plus, Upload, Trash2, Edit2, X, Loader2, Sparkles } from 'lucide-react';
 import { api, fmt } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
 
@@ -17,6 +17,7 @@ export default function Transactions() {
     const [notice, setNotice] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [suggesting, setSuggesting] = useState(false);
     const fileInputRef = useRef(null);
 
     const fetchData = async () => {
@@ -53,6 +54,27 @@ export default function Transactions() {
         });
         setError('');
         setShowForm(true);
+    };
+
+    const handleSuggestCategory = async () => {
+        setError('');
+        setSuggesting(true);
+        try {
+            const amount = parseFloat(form.amount);
+            const res = await api.post('/ai/categorize', {
+                description: form.description,
+                ...(Number.isFinite(amount) ? { amount } : {}),
+            });
+            if (res.categoryId) {
+                setForm((f) => ({ ...f, categoryId: res.categoryId }));
+            } else {
+                setError('No matching category found. Pick one yourself or add a new category.');
+            }
+        } catch {
+            setError('Could not suggest a category right now. Please pick one yourself.');
+        } finally {
+            setSuggesting(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -157,7 +179,14 @@ export default function Transactions() {
                                 className="w-full bg-zinc-50 dark:bg-zinc-800 rounded-lg px-3 py-2 text-sm border-transparent focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-zinc-900 dark:text-zinc-100" />
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-zinc-500 mb-1">Category</label>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs font-medium text-zinc-500">Category</label>
+                                <button type="button" onClick={handleSuggestCategory} disabled={suggesting || !form.description.trim()}
+                                    className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                    {suggesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                    {suggesting ? 'Suggesting...' : 'AI suggest'}
+                                </button>
+                            </div>
                             <select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
                                 className="w-full bg-zinc-50 dark:bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none text-zinc-900 dark:text-zinc-100">
                                 <option value="">Uncategorized</option>

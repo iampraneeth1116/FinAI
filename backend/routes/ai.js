@@ -93,21 +93,32 @@ Answer the user's question using this data. If something isn't in the data, say 
     res.json({ reply: result.response.text() });
 }));
 
-// POST /api/ai/categorize — auto-categorize a transaction description
+// POST /api/ai/categorize — suggest one of the user's own categories for a transaction
 router.post('/categorize', authenticate, validate({ body: categorizeSchema }), asyncHandler(async (req, res) => {
     const { description, amount } = req.body;
+
+    const categories = await prisma.category.findMany({ where: { userId: req.user.id } });
+    // Expenses are negative and income positive, so only offer categories of that type.
+    const type = amount > 0 ? 'INCOME' : amount < 0 ? 'EXPENSE' : null;
+    const options = type ? categories.filter(c => c.type === type) : categories;
+    if (options.length === 0) {
+        return res.json({ category: null, categoryId: null });
+    }
+
     const ai = getGenAI();
     const model = ai.getGenerativeModel({ model: MODEL });
 
     const prompt = `Classify this financial transaction into exactly one of these categories:
-Food & Dining, Transportation, Shopping, Entertainment, Health & Fitness, Utilities, Housing, Education, Travel, Personal Care, Income, Investment, Savings, Other.
+${options.map(c => c.name).join(', ')}.
 
 Transaction: "${description}" (Amount: $${amount ?? 'unknown'})
 
 Respond with ONLY the category name, nothing else.`;
 
     const result = await model.generateContent(prompt);
-    res.json({ category: result.response.text().trim() });
+    const answer = result.response.text().trim().replace(/^["'`]+|["'`.]+$/g, '').toLowerCase();
+    const match = options.find(c => c.name.toLowerCase() === answer);
+    res.json({ category: match?.name ?? null, categoryId: match?.id ?? null });
 }));
 
 // GET /api/ai/insights — proactive financial insights
