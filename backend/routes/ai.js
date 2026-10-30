@@ -1,5 +1,5 @@
 import express from 'express';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import prisma from '../lib/prisma.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { ApiError } from '../lib/ApiError.js';
@@ -9,18 +9,32 @@ import { chatSchema, categorizeSchema } from '../schemas/index.js';
 
 const router = express.Router();
 
-// Lazily construct the Gemini client so the server can boot (and tests can run)
+// Lazily construct the Groq client so the server can boot (and tests can run)
 // without an API key present. Throws a clear 503 only when AI is actually used.
-let genAI = null;
-function getGenAI() {
-    if (!process.env.GEMINI_API_KEY) {
-        throw new ApiError(503, 'AI service is not configured. Set GEMINI_API_KEY to enable it.');
+let groq = null;
+function getGroq() {
+    if (!process.env.GROQ_API_KEY) {
+        throw new ApiError(503, 'AI service is not configured. Set GROQ_API_KEY to enable it.');
     }
-    if (!genAI) genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    return genAI;
+    if (!groq) groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    return groq;
 }
 
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'openai/gpt-oss-120b';
+
+// Send messages to the model and return its reply text.
+async function complete(messages) {
+    const client = getGroq();
+    try {
+        const completion = await client.chat.completions.create({ model: MODEL, messages });
+        return completion.choices[0]?.message?.content?.trim() ?? '';
+    } catch (err) {
+        if (err.status === 429) {
+            throw new ApiError(429, 'The AI service is busy right now. Please try again shortly.');
+        }
+        throw err;
+    }
+}
 
 // In-memory insights cache: { userId -> { insights, expiresAt } }
 const insightsCache = new Map();
@@ -62,7 +76,6 @@ async function getUserFinancialContext(userId) {
 // POST /api/ai/chat — main conversational AI endpoint
 router.post('/chat', authenticate, validate({ body: chatSchema }), asyncHandler(async (req, res) => {
     const { message, history } = req.body;
-    const ai = getGenAI();
 
     const financialContext = await getUserFinancialContext(req.user.id);
 
@@ -79,18 +92,13 @@ USER'S FINANCIAL SNAPSHOT:
 
 Answer the user's question using this data. If something isn't in the data, say so honestly.`;
 
-    const model = ai.getGenerativeModel({ model: MODEL });
-
-    const chat = model.startChat({
-        history: [
-            { role: 'user', parts: [{ text: systemPrompt }] },
-            { role: 'model', parts: [{ text: "Hello! I'm FinAI, your personal finance assistant. I can see your financial data and I'm ready to help you make smarter decisions. What would you like to know?" }] },
-            ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
-        ],
-    });
-
-    const result = await chat.sendMessage(message);
-    res.json({ reply: result.response.text() });
+    const reply = await complete([
+        { role: 'system', content: systemPrompt },
+        // The frontend labels AI messages 'model'; Groq calls that role 'assistant'.
+        ...history.map(h => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.text })),
+        { role: 'user', content: message },
+    ]);
+    res.json({ reply });
 }));
 
 // POST /api/ai/categorize — suggest one of the user's own categories for a transaction
@@ -105,9 +113,6 @@ router.post('/categorize', authenticate, validate({ body: categorizeSchema }), a
         return res.json({ category: null, categoryId: null });
     }
 
-    const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: MODEL });
-
     const prompt = `Classify this financial transaction into exactly one of these categories:
 ${options.map(c => c.name).join(', ')}.
 
@@ -115,8 +120,8 @@ Transaction: "${description}" (Amount: $${amount ?? 'unknown'})
 
 Respond with ONLY the category name, nothing else.`;
 
-    const result = await model.generateContent(prompt);
-    const answer = result.response.text().trim().replace(/^["'`]+|["'`.]+$/g, '').toLowerCase();
+    const text = await complete([{ role: 'user', content: prompt }]);
+    const answer = text.replace(/^["'`]+|["'`.]+$/g, '').toLowerCase();
     const match = options.find(c => c.name.toLowerCase() === answer);
     res.json({ category: match?.name ?? null, categoryId: match?.id ?? null });
 }));
@@ -133,9 +138,6 @@ router.get('/insights', authenticate, asyncHandler(async (req, res) => {
         return res.json({ insights: [] });
     }
 
-    const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: MODEL });
-
     const prompt = `You are a financial advisor. Based on this user's data, generate exactly 3 short, actionable financial insights.
 
 Financial Data:
@@ -146,9 +148,8 @@ Financial Data:
 
 Return a JSON array of 3 objects with keys "title" (short, max 6 words) and "message" (max 20 words, specific and actionable). No markdown, pure JSON array only.`;
 
-    const result = await model.generateContent(prompt);
-    let text = result.response.text().trim();
-    text = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+    const raw = await complete([{ role: 'user', content: prompt }]);
+    const text = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
 
     let insights;
     try {

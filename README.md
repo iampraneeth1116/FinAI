@@ -1,13 +1,13 @@
 # FinAI — AI-Powered Personal Finance Intelligence System
 
 FinAI turns raw transaction data into clear insights, proactive alerts, and forward-looking
-projections. It combines a financial analytics engine, a Google Gemini–powered assistant
+projections. It combines a financial analytics engine, a Groq-powered assistant
 grounded in the user's real data, and a "what-if" scenario simulator — wrapped in a polished,
 responsive dashboard.
 
 **Code:** [GitHub Repository](https://github.com/iampraneeth1116/FinAI) · **Live Demo:** [fin-ai-v1.vercel.app](https://fin-ai-v1.vercel.app/login)
 
-**Tech Stack:** Next.js 16 · React 19 · Tailwind CSS 4 · Recharts · Express 5 · Prisma · PostgreSQL · JWT + bcrypt · Zod · Google Gemini API · Jest + Supertest
+**Tech Stack:** Next.js 16 · React 19 · Tailwind CSS 4 · Recharts · Express 5 · Prisma · PostgreSQL · JWT + bcrypt · Zod · Groq API · Jest + Supertest
 
 ---
 
@@ -21,7 +21,7 @@ responsive dashboard.
 - **Transactions** — manual entry, inline editing, category tagging, and bulk **CSV import**
   (case-insensitive headers, validation, duplicate-skipping).
 - **Budgets** — monthly limits with live spend tracking and over-budget indicators.
-- **AI assistant** — Gemini-powered chat grounded in the user's real transactions, plus
+- **AI assistant** — Groq-powered chat grounded in the user's real transactions, plus
   auto-generated proactive insights (cached for cost efficiency).
 - **Scenario simulator** — projects future balances from income/expense changes and one-time
   costs, with a baseline comparison.
@@ -80,7 +80,7 @@ responsive dashboard.
 │  PostgreSQL — User · Category · Transaction · Budget · Goal   │
 └──────────────────────────────────────────────────────────────┘
                             │
-                    Google Gemini API (chat, insights, categorization)
+                    Groq API (chat, insights, categorization)
 ```
 
 The financial-intelligence logic lives in pure, dependency-free functions
@@ -94,12 +94,12 @@ reused across routes.
 ### Prerequisites
 - Node.js 18+ and npm
 - A PostgreSQL database (e.g. [Neon](https://neon.tech) or [Supabase](https://supabase.com))
-- A [Google Gemini API key](https://aistudio.google.com/app/apikey)
+- A [Groq API key](https://console.groq.com/keys)
 
 ### 1. Backend
 ```bash
 cd backend
-cp .env.example .env        # then fill in DATABASE_URL, JWT_SECRET, GEMINI_API_KEY
+cp .env.example .env        # then fill in DATABASE_URL, JWT_SECRET, GROQ_API_KEY
 npm install
 npx prisma db push          # create tables (User, Category, Transaction, Budget, Goal)
 npm run seed                # optional: demo users + sample data
@@ -138,7 +138,7 @@ npm test
 | GET | `/api/analytics/{summary,monthly,by-category,recent}` | Dashboard analytics |
 | POST | `/api/scenario/simulate` | What-if projections |
 | GET | `/api/reports/monthly[.pdf|.csv]` | Monthly report (JSON/PDF/CSV) |
-| POST/GET | `/api/ai/{chat,insights,categorize}` | Gemini assistant (rate-limited) |
+| POST/GET | `/api/ai/{chat,insights,categorize}` | Groq assistant (rate-limited) |
 | GET/PUT | `/api/users/me` | Profile + password change |
 
 ---

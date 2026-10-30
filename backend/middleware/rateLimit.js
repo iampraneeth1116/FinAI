@@ -10,7 +10,7 @@ export const authLimiter = rateLimit({
     message: { error: 'Too many authentication attempts. Please try again in a few minutes.' },
 });
 
-// Limiter for AI endpoints, which are expensive (external Gemini calls).
+// Limiter for AI endpoints, which are expensive (external Groq calls).
 export const aiLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
     max: 15,

@@ -109,7 +109,7 @@ export default function Assistant() {
                     </div>
                     <div>
                         <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">FinAI Assistant</h2>
-                        <p className="text-xs text-emerald-500">Powered by Gemini • Online</p>
+                        <p className="text-xs text-emerald-500">Powered by Groq • Online</p>
                     </div>
                 </div>
 
